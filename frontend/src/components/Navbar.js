@@ -2,11 +2,12 @@
  * ============================================================================
  * Project: What Should We Eat?
  * File: frontend/src/components/Navbar.js
- * Description: Reusable top navigation bar showing room code and member count.
+ * Description: Top navigation bar displaying leave action, active foodie count,
+ *              and a one-click copyable room code badge.
  * Author: Thanh Lan Ngo
  * Collaborators: Jovian Niko Soesilo
  * Date Created: 2026-11-16
- * Latest Modified: 2026-11-17
+ * Last Modified: 2026-11-21
  * Modified by: Thanh Lan Ngo
  * ============================================================================
  */
@@ -21,6 +22,9 @@ export default class Navbar {
     this.memberCountEl = null;
   }
 
+  /**
+   * Updates the active member counter in-place without rebuilding the navbar.
+   */
   updateMemberCount(count) {
     this.memberCount = count;
     if (this.memberCountEl) {
@@ -35,7 +39,8 @@ export default class Navbar {
 
     const homeBtn = document.createElement('button');
     homeBtn.type = 'button';
-    homeBtn.className = 'flex items-center gap-2.5 text-left hover:opacity-80 transition-opacity cursor-pointer';
+    homeBtn.className =
+      'flex items-center gap-2.5 text-left hover:opacity-80 transition-opacity cursor-pointer';
     homeBtn.title = 'Leave Room';
     homeBtn.innerHTML = `
       <span class="text-2xl" role="img" aria-label="pizza">🍕</span>
@@ -54,13 +59,35 @@ export default class Navbar {
     nav.appendChild(homeBtn);
 
     if (this.roomCode) {
-      const badge = document.createElement('div');
-      badge.className = 'bg-orange-50 px-3.5 py-1.5 rounded-xl border border-orange-200';
-      badge.innerHTML = `
+      const badgeBtn = document.createElement('button');
+      badgeBtn.type = 'button';
+      badgeBtn.title = 'Click to copy room code';
+      badgeBtn.className =
+        'bg-orange-50 hover:bg-orange-100 px-3.5 py-1.5 rounded-xl border border-orange-200 transition-colors cursor-pointer';
+      badgeBtn.innerHTML = `
         <span class="text-[10px] font-bold text-orange-500 uppercase tracking-wider">Room</span>
-        <span class="ml-1.5 font-black text-slate-800 tracking-widest text-sm">${escapeHtml(this.roomCode)}</span>
+        <span id="room-code-text" class="ml-1.5 font-black text-slate-800 tracking-widest text-sm">${escapeHtml(this.roomCode)}</span>
       `;
-      nav.appendChild(badge);
+
+      badgeBtn.addEventListener('click', async () => {
+        const codeLabel = badgeBtn.querySelector('#room-code-text');
+        try {
+          if (navigator.clipboard?.writeText) {
+            await navigator.clipboard.writeText(this.roomCode);
+          }
+          if (codeLabel) {
+            const original = escapeHtml(this.roomCode);
+            codeLabel.textContent = 'COPIED!';
+            setTimeout(() => {
+              codeLabel.textContent = this.roomCode;
+            }, 1200);
+          }
+        } catch {
+          // Ignore clipboard permission errors in restricted browsers
+        }
+      });
+
+      nav.appendChild(badgeBtn);
     }
 
     return nav;

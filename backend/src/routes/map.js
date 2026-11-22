@@ -3,13 +3,12 @@
  * Project: What Should We Eat?
  * File: backend/src/routes/map.js
  * Description: GET /api/map?lat=..&lng=..
- *              Returns a JPEG map image with a pin, for use in <img src>.
- *              Goes through the backend so the Geoapify key stays secret.
+ *              Returns a JPEG map image with a location pin for <img src>.
  * Author: Jovian Niko Soesilo
  * Collaborators: Thanh Lan Ngo
  * Date Created: 2026-11-21
  * Last Modified: 2026-11-21
- * Modified by: Jovian Niko Soesilo
+ * Modified by: Thanh Lan Ngo
  * ============================================================================
  */
 
@@ -30,11 +29,11 @@ router.get('/', async (req, res) => {
 
   try {
     const image = await getStaticMap(lat, lng);
-    res.set('Cache-Control', 'public, max-age=86400'); // browser keeps it for a day
-    res.type('jpeg').send(image);
+    res.set('Cache-Control', 'public, max-age=86400');
+    return res.type('jpeg').send(image);
   } catch (err) {
-    console.error(err);
-    res.status(502).json({ error: 'Could not load map image' });
+    console.error('Map route error:', err.message);
+    return res.status(502).json({ error: 'Could not load map image' });
   }
 });
 

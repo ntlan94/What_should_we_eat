@@ -2,11 +2,12 @@
  * ============================================================================
  * Project: What Should We Eat?
  * File: frontend/src/components/Button.js
- * Description: Standardized OOP UI Button component.
+ * Description: Standardized reusable UI button component with disabled & label
+ *              state helpers.
  * Author: Thanh Lan Ngo
  * Collaborators: Jovian Niko Soesilo
  * Date Created: 2026-11-16
- * Latest Modified: 2026-11-17
+ * Last Modified: 2026-11-21
  * Modified by: Thanh Lan Ngo
  * ============================================================================
  */
@@ -22,9 +23,9 @@ export default class Button {
   }
 
   setDisabled(isDisabled) {
-    this.disabled = isDisabled;
+    this.disabled = Boolean(isDisabled);
     if (this.element) {
-      this.element.disabled = isDisabled;
+      this.element.disabled = this.disabled;
     }
   }
 
@@ -49,7 +50,7 @@ export default class Button {
       secondary:
         'bg-gradient-to-r from-rose-500 to-orange-500 hover:from-rose-600 hover:to-orange-600 text-white shadow-rose-500/25 disabled:from-slate-200 disabled:to-slate-200 disabled:text-slate-400 disabled:shadow-none',
       neutral:
-        'bg-white hover:bg-slate-50 text-slate-800 border border-slate-200 shadow-sm'
+        'bg-white hover:bg-slate-50 text-slate-800 border border-slate-200 shadow-sm',
     };
 
     btn.className = `${baseClasses} ${variants[this.variant] || variants.primary}`;

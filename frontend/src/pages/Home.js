@@ -2,11 +2,13 @@
  * ============================================================================
  * Project: What Should We Eat?
  * File: frontend/src/pages/Home.js
- * Description: Home/Lobby page for creating or joining a restaurant swipe room.
+ * Description: Home/Lobby screen allowing users to create a room (with display
+ *              name, location, radius, open-now filter, and match mode:
+ *              unanimous, majority, or solo) or join an existing room by code.
  * Author: Thanh Lan Ngo
  * Collaborators: Jovian Niko Soesilo
  * Date Created: 2026-11-16
- * Latest Modified: 2026-11-17
+ * Last Modified: 2026-11-21
  * Modified by: Thanh Lan Ngo
  * ============================================================================
  */
@@ -21,8 +23,11 @@ export default class Home {
 
     // Local UI State
     this.activeTab = 'create'; // 'create' | 'join'
+    this.displayName = '';
     this.location = '';
     this.radius = 3;
+    this.openNow = false;
+    this.matchMode = 'all'; // 'all' | 'majority' | 'solo'
     this.roomCode = '';
     this.radiusOptions = [1, 3, 5, 10];
 
@@ -36,9 +41,29 @@ export default class Home {
     this.updateView();
   }
 
-  setRadius(km) {
-    this.radius = Number(km);
-    this.updateView();
+  /**
+   * Updates radius state and syncs pill buttons, slider, and badge in-place
+   * so error alerts and input focus are preserved.
+   */
+  applyRadius(km, formEl) {
+    const clamped = Math.max(1, Math.min(15, Number(km) || 3));
+    this.radius = clamped;
+
+    if (!formEl) return;
+    const badge = formEl.querySelector('#radius-badge');
+    const slider = formEl.querySelector('#radius-slider');
+    if (badge) badge.textContent = `${this.radius} km`;
+    if (slider) slider.value = String(this.radius);
+
+    formEl.querySelectorAll('.radius-pill').forEach((pill) => {
+      const pillKm = Number(pill.getAttribute('data-km'));
+      const isSelected = pillKm === this.radius;
+      pill.className = `radius-pill py-2.5 rounded-xl text-sm font-bold border transition-all cursor-pointer ${
+        isSelected
+          ? 'bg-orange-500 text-white border-orange-500 shadow-md shadow-orange-500/20'
+          : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+      }`;
+    });
   }
 
   updateView() {
@@ -104,7 +129,7 @@ export default class Home {
 
   buildCreateForm() {
     const form = document.createElement('form');
-    form.className = 'space-y-6';
+    form.className = 'space-y-5';
 
     const pillsHtml = this.radiusOptions
       .map(
@@ -125,6 +150,20 @@ export default class Home {
       .join('');
 
     form.innerHTML = `
+      <div>
+        <label for="host-name-input" class="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">
+          Your Name (Optional)
+        </label>
+        <input
+          id="host-name-input"
+          type="text"
+          value="${escapeHtml(this.displayName)}"
+          placeholder="Host"
+          maxlength="60"
+          class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-800 placeholder-slate-400 focus:outline-none focus:bg-white focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-all"
+        />
+      </div>
+
       <div>
         <label for="location-input" class="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">
           Where are we eating?
@@ -171,6 +210,35 @@ export default class Home {
         </div>
       </div>
 
+      <div class="grid grid-cols-1 gap-3 pt-1">
+        <div>
+          <label for="match-mode-select" class="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">
+            Match Rule
+          </label>
+          <select
+            id="match-mode-select"
+            class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-semibold text-slate-800 focus:outline-none focus:bg-white focus:ring-2 focus:ring-orange-500"
+          >
+            <option value="all" ${this.matchMode === 'all' ? 'selected' : ''}>Everyone must swipe right (Unanimous)</option>
+            <option value="majority" ${this.matchMode === 'majority' ? 'selected' : ''}>Majority vote (&gt;50% swipe right)</option>
+            <option value="solo" ${this.matchMode === 'solo' ? 'selected' : ''}>Solo / 1-person mode (Instant match on right swipe)</option>
+          </select>
+        </div>
+
+        <label class="flex items-center justify-between bg-orange-50/70 border border-orange-100 px-4 py-3 rounded-xl cursor-pointer">
+          <div>
+            <span class="text-sm font-bold text-slate-800 block">Open now only</span>
+            <span class="text-xs text-slate-500">Hide places known to be closed</span>
+          </div>
+          <input
+            id="open-now-checkbox"
+            type="checkbox"
+            ${this.openNow ? 'checked' : ''}
+            class="w-4 h-4 accent-orange-500 cursor-pointer"
+          />
+        </label>
+      </div>
+
       <p id="form-error" class="hidden text-sm font-semibold text-rose-600" role="alert"></p>
       <div id="create-btn-slot"></div>
     `;
@@ -179,48 +247,57 @@ export default class Home {
       text: 'Create Room',
       type: 'submit',
       variant: 'primary',
-      disabled: !this.location.trim()
+      disabled: !this.location.trim(),
     });
     form.querySelector('#create-btn-slot').appendChild(submitButton.render());
 
-    // Location input listener
+    form.querySelector('#host-name-input').addEventListener('input', (e) => {
+      this.displayName = e.target.value;
+    });
+
     const locationInput = form.querySelector('#location-input');
     locationInput.addEventListener('input', (e) => {
       this.location = e.target.value;
       submitButton.setDisabled(!this.location.trim());
     });
 
-    // Quick-select radius pill listeners
     form.querySelectorAll('.radius-pill').forEach((pill) => {
       pill.addEventListener('click', () => {
-        this.setRadius(Number(pill.getAttribute('data-km')));
+        this.applyRadius(Number(pill.getAttribute('data-km')), form);
       });
     });
 
-    // Range slider listener
     const slider = form.querySelector('#radius-slider');
-    const badge = form.querySelector('#radius-badge');
     slider.addEventListener('input', (e) => {
-      this.radius = Number(e.target.value);
-      badge.textContent = `${this.radius} km`;
-    });
-    slider.addEventListener('change', (e) => {
-      this.setRadius(Number(e.target.value));
+      this.applyRadius(Number(e.target.value), form);
     });
 
-    // Submit listener
+    form.querySelector('#match-mode-select').addEventListener('change', (e) => {
+      this.matchMode = e.target.value;
+    });
+
+    form.querySelector('#open-now-checkbox').addEventListener('change', (e) => {
+      this.openNow = e.target.checked;
+    });
+
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
       if (!this.location.trim()) return;
+
+      const errorMessage = form.querySelector('#form-error');
+      errorMessage.classList.add('hidden');
       submitButton.setDisabled(true);
       submitButton.setText('Finding Restaurants...');
+
       try {
         await this.onCreateRoom({
           location: this.location.trim(),
-          radius: this.radius
+          radius: this.radius,
+          openNow: this.openNow,
+          matchMode: this.matchMode,
+          displayName: this.displayName.trim() || 'Host',
         });
       } catch (error) {
-        const errorMessage = form.querySelector('#form-error');
         errorMessage.textContent = error.message;
         errorMessage.classList.remove('hidden');
         submitButton.setText('Create Room');
@@ -233,9 +310,23 @@ export default class Home {
 
   buildJoinForm() {
     const form = document.createElement('form');
-    form.className = 'space-y-6';
+    form.className = 'space-y-5';
 
     form.innerHTML = `
+      <div>
+        <label for="guest-name-input" class="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">
+          Your Name (Optional)
+        </label>
+        <input
+          id="guest-name-input"
+          type="text"
+          value="${escapeHtml(this.displayName)}"
+          placeholder="Guest"
+          maxlength="60"
+          class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-800 placeholder-slate-400 focus:outline-none focus:bg-white focus:ring-2 focus:ring-rose-500 focus:border-transparent transition-all"
+        />
+      </div>
+
       <div class="text-center">
         <label for="room-code-input" class="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-3">
           Enter 4-Digit Room Code
@@ -262,9 +353,13 @@ export default class Home {
       text: 'Join Room',
       type: 'submit',
       variant: 'secondary',
-      disabled: this.roomCode.length < 4
+      disabled: this.roomCode.length < 4,
     });
     form.querySelector('#join-btn-slot').appendChild(joinButton.render());
+
+    form.querySelector('#guest-name-input').addEventListener('input', (e) => {
+      this.displayName = e.target.value;
+    });
 
     const codeInput = form.querySelector('#room-code-input');
     codeInput.addEventListener('input', (e) => {
@@ -277,12 +372,18 @@ export default class Home {
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
       if (this.roomCode.length < 4) return;
+
+      const errorMessage = form.querySelector('#form-error');
+      errorMessage.classList.add('hidden');
       joinButton.setDisabled(true);
       joinButton.setText('Joining Room...');
+
       try {
-        await this.onJoinRoom({ roomCode: this.roomCode });
+        await this.onJoinRoom({
+          roomCode: this.roomCode,
+          displayName: this.displayName.trim() || 'Guest',
+        });
       } catch (error) {
-        const errorMessage = form.querySelector('#form-error');
         errorMessage.textContent = error.message;
         errorMessage.classList.remove('hidden');
         joinButton.setText('Join Room');

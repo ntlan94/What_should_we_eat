@@ -1,23 +1,36 @@
 /**
+ * ============================================================================
  * Project: What Should We Eat?
  * File: backend/src/controllers/roomController.js
- * Description: Handles room creation, joining, state, and swipe requests.
+ * Description: Handles room creation, room lookup, and member join requests.
+ * Author: Jovian Niko Soesilo
+ * Collaborators: Thanh Lan Ngo
+ * Date Created: 2026-11-17
+ * Last Modified: 2026-11-21
  * Modified by: Thanh Lan Ngo
+ * ============================================================================
  */
 
-import { createRoom, getRoom, joinRoom, recordSwipe } from '../services/database.js';
+import { createRoom, getRoom, joinRoom, VALID_MATCH_MODES } from '../services/roomStore.js';
 import { geocode } from '../services/geocode.js';
 import { getNearbyRestaurants } from '../services/places.js';
 
 const isValidMember = (member) =>
-  member
-  && typeof member.id === 'string'
-  && member.id.length > 0
-  && member.id.length <= 128
-  && (member.name === undefined || (typeof member.name === 'string' && member.name.length <= 60));
+  Boolean(member) &&
+  typeof member.id === 'string' &&
+  member.id.trim().length > 0 &&
+  member.id.trim().length <= 128 &&
+  (member.name === undefined || (typeof member.name === 'string' && member.name.length <= 60));
+
+const cleanName = (rawName, fallback) => {
+  if (typeof rawName !== 'string') return fallback;
+  const trimmed = rawName.trim();
+  return trimmed ? trimmed.slice(0, 60) : fallback;
+};
 
 export async function createRoomHandler(req, res) {
-  const { location, radiusKm, member } = req.body ?? {};
+  const { location, radiusKm, openNow = false, matchMode = 'all', member } = req.body ?? {};
+
   if (typeof location !== 'string' || !location.trim()) {
     return res.status(400).json({ error: 'location is required' });
   }
@@ -27,31 +40,51 @@ export async function createRoomHandler(req, res) {
   if (!isValidMember(member)) {
     return res.status(400).json({ error: 'A valid member id is required' });
   }
+  if (matchMode !== undefined && !VALID_MATCH_MODES.has(matchMode)) {
+    return res.status(400).json({ error: 'matchMode must be all, majority, or solo' });
+  }
 
   try {
     const place = await geocode(location.trim());
-    if (!place) return res.status(404).json({ error: 'No location found' });
-    const restaurants = await getNearbyRestaurants({
+    if (!place) {
+      return res.status(404).json({ error: 'No location found' });
+    }
+
+    let restaurants = await getNearbyRestaurants({
       lat: place.lat,
       lng: place.lng,
       radius: Math.round(radiusKm * 1000),
     });
+
+    if (openNow === true) {
+      restaurants = restaurants.filter((restaurant) => restaurant.isOpenNow !== false);
+    }
+
     const room = createRoom({
       location: place.label,
       radiusKm,
+      openNow: openNow === true,
+      matchMode,
       restaurants,
-      host: { id: member.id, name: member.name || 'Host' },
+      host: {
+        id: member.id.trim(),
+        name: cleanName(member.name, 'Host'),
+      },
     });
+
     return res.status(201).json(room);
   } catch (error) {
-    console.error('Room creation failed:', error);
+    console.error('Room creation failed:', error.message);
     return res.status(502).json({ error: 'Could not find restaurants for that location' });
   }
 }
 
 export function getRoomHandler(req, res) {
-  const room = getRoom(req.params.code.toUpperCase());
-  if (!room) return res.status(404).json({ error: 'Room not found' });
+  const code = String(req.params.code ?? '').toUpperCase();
+  const room = getRoom(code);
+  if (!room) {
+    return res.status(404).json({ error: 'Room not found' });
+  }
   return res.json(room);
 }
 
@@ -61,35 +94,18 @@ export function joinRoomHandler(req, res) {
     return res.status(400).json({ error: 'A valid member id is required' });
   }
 
-  const result = joinRoom(req.params.code.toUpperCase(), {
-    id: member.id,
-    name: typeof member.name === 'string' && member.name.trim() ? member.name.trim() : 'Guest',
+  const code = String(req.params.code ?? '').toUpperCase();
+  const result = joinRoom(code, {
+    id: member.id.trim(),
+    name: cleanName(member.name, 'Guest'),
   });
-  if (result.error === 'not_found') return res.status(404).json({ error: 'Room not found' });
-  if (result.error === 'matched') return res.status(409).json({ error: 'This room already has a match' });
-  return res.json(result.room);
-}
 
-export function swipeHandler(req, res) {
-  const { memberId, restaurantId, direction } = req.body ?? {};
-  if (typeof memberId !== 'string' || !memberId || typeof restaurantId !== 'string' || !restaurantId) {
-    return res.status(400).json({ error: 'memberId and restaurantId are required' });
+  if (result.error === 'not_found') {
+    return res.status(404).json({ error: 'Room not found' });
   }
-  if (direction !== 'left' && direction !== 'right') {
-    return res.status(400).json({ error: 'direction must be left or right' });
+  if (result.error === 'matched') {
+    return res.status(409).json({ error: 'This room already has a match' });
   }
 
-  const result = recordSwipe(
-    req.params.code.toUpperCase(),
-    memberId,
-    restaurantId,
-    direction
-  );
-  if (result.error === 'not_found') return res.status(404).json({ error: 'Room not found' });
-  if (result.error === 'not_a_member') return res.status(403).json({ error: 'Join this room before swiping' });
-  if (result.error === 'restaurant_not_found') {
-    return res.status(404).json({ error: 'Restaurant not found in this room' });
-  }
-  if (result.error === 'matched') return res.status(409).json({ error: 'This room already has a match' });
   return res.json(result.room);
 }
