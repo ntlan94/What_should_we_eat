@@ -1,13 +1,30 @@
 /**
+ * ============================================================================
  * Project: What Should We Eat?
  * File: frontend/src/services/api.js
- * Description: Frontend API client for backend room operations.
+ * Description: Network client for backend room, swipe, and static map endpoints.
+ *              Display formatting lives in utils/formatRestaurant.js.
+ * Author: Thanh Lan Ngo
+ * Collaborators: Jovian Niko Soesilo
+ * Date Created: 2026-11-16
+ * Last Modified: 2026-11-21
  * Modified by: Thanh Lan Ngo
+ * ============================================================================
  */
+
+import { formatRoomRestaurants } from '../utils/formatRestaurant.js';
 
 const API_BASE_URL = (
   window.WSWE_API_BASE_URL || `http://${window.location.hostname || 'localhost'}:3000/api`
 ).replace(/\/$/, '');
+
+export class ApiError extends Error {
+  constructor(message, status = 500) {
+    super(message);
+    this.name = 'ApiError';
+    this.status = status;
+  }
+}
 
 async function request(path, options = {}) {
   const response = await fetch(`${API_BASE_URL}${path}`, {
@@ -17,64 +34,42 @@ async function request(path, options = {}) {
       ...options.headers,
     },
   });
+
   let body;
   try {
     body = await response.json();
   } catch {
-    throw new Error(`Backend returned an unreadable response (${response.status})`);
+    throw new ApiError(
+      `Backend returned an unreadable response (${response.status})`,
+      response.status
+    );
   }
+
   if (!response.ok) {
-    throw new Error(body.error || `Backend request failed (${response.status})`);
+    throw new ApiError(
+      body.error || `Backend request failed (${response.status})`,
+      response.status
+    );
   }
+
   return body;
 }
 
-function decorateRoom(room) {
-  const imageByCuisine = [
-    { match: /pizza|italian/i, url: 'photo-1513104890138-7c749659a591' },
-    { match: /thai|noodle|asian|sushi/i, url: 'photo-1559314809-0d155014e29e' },
-    { match: /burger|american|fast.food/i, url: 'photo-1568901346375-23c9450c58cd' },
-    { match: /taco|mexican/i, url: 'photo-1565299585323-38d6b0865b47' },
-  ];
-  const imageFor = (cuisine) => {
-    const match = imageByCuisine.find(({ match: pattern }) => pattern.test(cuisine || ''));
-    const imageId = match?.url || 'photo-1546069901-ba9599a7e63c';
-    return `https://images.unsplash.com/${imageId}?auto=format&fit=crop&w=800&q=80`;
-  };
-  const displayRestaurant = (restaurant) => {
-    const cuisine = (restaurant.cuisine || 'restaurant').replace(/[_;]/g, ' ');
-    const distance = Number.isFinite(restaurant.distance)
-      ? restaurant.distance < 1000
-        ? `${Math.round(restaurant.distance)} m away`
-        : `${(restaurant.distance / 1000).toFixed(1)} km away`
-      : '';
-    const availability = restaurant.isOpenNow === true
-      ? 'Open now'
-      : restaurant.isOpenNow === false
-        ? 'Closed'
-        : '';
-    return {
-      ...restaurant,
-      image: imageFor(cuisine),
-      description: [cuisine, distance, availability].filter(Boolean).join(' • '),
-    };
-  };
-  const restaurants = room.restaurants.map(displayRestaurant);
-  return {
-    ...room,
-    restaurants,
-    matchedRestaurant: room.matchedRestaurant
-      ? displayRestaurant(room.matchedRestaurant)
-      : null,
-  };
+export function getMapImageUrl(lat, lng) {
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return '';
+  const params = new URLSearchParams({
+    lat: String(lat),
+    lng: String(lng),
+  });
+  return `${API_BASE_URL}/map?${params}`;
 }
 
-export async function createRoom({ location, radiusKm, member }) {
+export async function createRoom({ location, radiusKm, openNow = false, matchMode = 'all', member }) {
   const room = await request('/rooms', {
     method: 'POST',
-    body: JSON.stringify({ location, radiusKm, member }),
+    body: JSON.stringify({ location, radiusKm, openNow, matchMode, member }),
   });
-  return decorateRoom(room);
+  return formatRoomRestaurants(room);
 }
 
 export async function joinRoom(code, member) {
@@ -82,11 +77,12 @@ export async function joinRoom(code, member) {
     method: 'POST',
     body: JSON.stringify({ member }),
   });
-  return decorateRoom(room);
+  return formatRoomRestaurants(room);
 }
 
 export async function fetchRoom(code) {
-  return decorateRoom(await request(`/rooms/${encodeURIComponent(code)}`));
+  const room = await request(`/rooms/${encodeURIComponent(code)}`);
+  return formatRoomRestaurants(room);
 }
 
 export async function submitSwipe(code, memberId, restaurantId, direction) {
@@ -94,5 +90,5 @@ export async function submitSwipe(code, memberId, restaurantId, direction) {
     method: 'POST',
     body: JSON.stringify({ memberId, restaurantId, direction }),
   });
-  return decorateRoom(room);
+  return formatRoomRestaurants(room);
 }

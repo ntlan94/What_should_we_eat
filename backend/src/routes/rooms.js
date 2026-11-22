@@ -1,8 +1,15 @@
 /**
+ * ============================================================================
  * Project: What Should We Eat?
  * File: backend/src/routes/rooms.js
- * Description: Express routes for room actions.
+ * Description: Express routes for creating rooms, fetching state, joining, and
+ *              recording swipes.
+ * Author: Thanh Lan Ngo
+ * Collaborators: Jovian Niko Soesilo
+ * Date Created: 2026-11-17
+ * Last Modified: 2026-11-21
  * Modified by: Thanh Lan Ngo
+ * ============================================================================
  */
 
 import { Router } from 'express';
@@ -10,8 +17,8 @@ import {
   createRoomHandler,
   getRoomHandler,
   joinRoomHandler,
-  swipeHandler,
 } from '../controllers/roomController.js';
+import { swipeHandler } from '../controllers/swipeController.js';
 
 const router = Router();
 

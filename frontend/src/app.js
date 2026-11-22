@@ -2,11 +2,13 @@
  * ============================================================================
  * Project: What Should We Eat?
  * File: frontend/src/app.js
- * Description: Main frontend application controller coordinating views & models.
+ * Description: Top-level frontend application controller managing session IDs,
+ *              User/Room models, API calls, and transitions between Home,
+ *              SwipeRoom, and Match views.
  * Author: Thanh Lan Ngo
  * Collaborators: Jovian Niko Soesilo
  * Date Created: 2026-11-16
- * Latest Modified: 2026-11-17
+ * Last Modified: 2026-11-21
  * Modified by: Thanh Lan Ngo
  * ============================================================================
  */
@@ -19,27 +21,38 @@ import Home from './pages/Home.js';
 import SwipeRoom from './pages/SwipeRoom.js';
 import Match from './pages/Match.js';
 
+/**
+ * Generates or retrieves a per-tab member ID so each browser tab can act as
+ * an independent participant when testing multiplayer locally.
+ */
 function getMemberId() {
   let memberId = sessionStorage.getItem('wswe-member-id');
   if (!memberId) {
-    memberId = crypto.randomUUID();
+    memberId =
+      typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+        ? crypto.randomUUID()
+        : `member-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     sessionStorage.setItem('wswe-member-id', memberId);
   }
   return memberId;
 }
 
 function roomFromServer(state) {
-  const room = new Room(state.code, state.location, state.radiusKm);
+  const room = new Room(state.code, state.location, state.radiusKm, {
+    openNow: state.openNow,
+    matchMode: state.matchMode,
+  });
   room.updateFromServer(state);
   return room;
 }
 
-class AppController {
+export class AppController {
   constructor(rootElement) {
     this.rootElement = rootElement;
     this.currentUser = null;
     this.activeRoom = null;
     this.matchedRestaurant = null;
+    this.activeSwipeRoomPage = null;
   }
 
   init() {
@@ -47,38 +60,41 @@ class AppController {
   }
 
   mount(element) {
+    if (this.activeSwipeRoomPage) {
+      this.activeSwipeRoomPage.cleanup();
+      this.activeSwipeRoomPage = null;
+    }
     this.rootElement.innerHTML = '';
     this.rootElement.appendChild(element);
   }
 
   showHome() {
+    this.activeRoom = null;
+    this.matchedRestaurant = null;
     const homePage = new Home({
       onCreateRoom: (data) => this.handleCreateRoom(data),
-      onJoinRoom: (data) => this.handleJoinRoom(data)
+      onJoinRoom: (data) => this.handleJoinRoom(data),
     });
     this.mount(homePage.render());
   }
 
-  async handleCreateRoom({ location, radius }) {
-    this.currentUser = new User(getMemberId(), 'Host', true);
+  async handleCreateRoom({ location, radius, openNow, matchMode, displayName }) {
+    this.currentUser = new User(getMemberId(), displayName || 'Host', true);
     const state = await createRoom({
       location,
       radiusKm: radius,
-      member: { id: this.currentUser.id, name: this.currentUser.name },
+      openNow,
+      matchMode,
+      member: this.currentUser.toPayload(),
     });
     this.activeRoom = roomFromServer(state);
-
     this.showSwipeRoom();
   }
 
-  async handleJoinRoom({ roomCode }) {
-    this.currentUser = new User(getMemberId(), 'Guest', false);
-    const state = await joinRoom(roomCode, {
-      id: this.currentUser.id,
-      name: this.currentUser.name,
-    });
+  async handleJoinRoom({ roomCode, displayName }) {
+    this.currentUser = new User(getMemberId(), displayName || 'Guest', false);
+    const state = await joinRoom(roomCode, this.currentUser.toPayload());
     this.activeRoom = roomFromServer(state);
-
     this.showSwipeRoom();
   }
 
@@ -87,8 +103,9 @@ class AppController {
       room: this.activeRoom,
       currentUser: this.currentUser,
       onMatchFound: (restaurant) => this.showMatch(restaurant),
-      onLeave: () => this.showHome()
+      onLeave: () => this.showHome(),
     });
+    this.activeSwipeRoomPage = swipeRoomPage;
     this.mount(swipeRoomPage.render());
   }
 
@@ -97,15 +114,17 @@ class AppController {
     const matchPage = new Match({
       restaurant: this.matchedRestaurant,
       roomCode: this.activeRoom.code,
-      onRestart: () => this.showHome()
+      matchDetails: this.activeRoom?.matchDetails ?? null,
+      onRestart: () => this.showHome(),
     });
     this.mount(matchPage.render());
   }
 }
 
-// Initialize the application when the DOM is ready
+// Initialize the application when the DOM is ready.
 document.addEventListener('DOMContentLoaded', () => {
   const root = document.getElementById('app');
+  if (!root) return;
   const app = new AppController(root);
   app.init();
 });

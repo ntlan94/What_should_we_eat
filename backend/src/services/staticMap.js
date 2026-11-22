@@ -2,27 +2,26 @@
  * ============================================================================
  * Project: What Should We Eat?
  * File: backend/src/services/staticMap.js
- * Description: Fetches a small map image with a pin from the Geoapify Static
- *              Maps API. Images are cached in memory so each location is only
- *              downloaded once, which saves free daily credits.
- * Author: Jovian Niko Soesilo
- * Collaborators: Thanh Lan Ngo
+ * Description: Fetches a map image with a location pin from Geoapify Static
+ *              Maps API and caches images in memory to save free daily quota.
+ * Author: Thanh Lan Ngo
+ * Collaborators: Jovian Niko Soesilo
  * Date Created: 2026-11-21
  * Last Modified: 2026-11-21
- * Modified by: Jovian Niko Soesilo
+ * Modified by: Thanh Lan Ngo
  * ============================================================================
  */
 
 const WIDTH = 600;
 const HEIGHT = 400;
 const ZOOM = 16;
-const PIN_COLOR = '#f97316'; // orange, matches the app theme
+const PIN_COLOR = '#f97316';
 const MAX_CACHED_IMAGES = 300;
 
 const cache = new Map(); // "lat,lng" -> JPEG Buffer
 
 export async function getStaticMap(lat, lng) {
-  // Round to ~1 m so tiny float differences reuse the same cached image.
+  // Round to 5 decimals (~1.1 m) so nearby requests share cached map tiles.
   const key = `${lat.toFixed(5)},${lng.toFixed(5)}`;
   if (cache.has(key)) return cache.get(key);
 
@@ -36,20 +35,21 @@ export async function getStaticMap(lat, lng) {
     center: `lonlat:${lng},${lat}`,
     zoom: String(ZOOM),
     marker: `lonlat:${lng},${lat};type:material;color:${PIN_COLOR};size:48`,
-    format: 'jpeg', // about half the size of png
+    format: 'jpeg',
     apiKey,
   });
 
   const response = await fetch(`https://maps.geoapify.com/v1/staticmap?${params}`);
   if (!response.ok) {
-    throw new Error(`Geoapify error ${response.status}: ${await response.text()}`);
+    throw new Error(`Geoapify static map failed with status ${response.status}`);
   }
 
   const image = Buffer.from(await response.arrayBuffer());
 
-  // Drop the oldest image when the cache is full so memory stays small.
+  // Evict oldest entry when cache reaches capacity.
   if (cache.size >= MAX_CACHED_IMAGES) {
-    cache.delete(cache.keys().next().value);
+    const oldestKey = cache.keys().next().value;
+    cache.delete(oldestKey);
   }
   cache.set(key, image);
   return image;

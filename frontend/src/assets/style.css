@@ -2,11 +2,12 @@
  * ============================================================================
  * Project: What Should We Eat?
  * File: frontend/src/assets/style.css
- * Description: Global CSS animations and custom input styling.
+ * Description: Global animations, custom range slider styling, and swipe card
+ *              gesture polish.
  * Author: Thanh Lan Ngo
  * Collaborators: Jovian Niko Soesilo
  * Date Created: 2026-11-16
- * Last Modified: 2026-11-17
+ * Last Modified: 2026-11-21
  * Modified by: Thanh Lan Ngo
  * ============================================================================
  */
@@ -29,4 +30,10 @@
 /* Custom Range Slider Accent */
 input[type="range"] {
   accent-color: #f97316;
+}
+
+/* Prevent accidental browser scroll/pull-to-refresh while dragging a swipe card */
+.swipe-card-surface {
+  touch-action: pan-y;
+  user-select: none;
 }

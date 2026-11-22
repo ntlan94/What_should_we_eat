@@ -1,15 +1,22 @@
 /**
+ * ============================================================================
  * Project: What Should We Eat?
  * File: backend/test/room.test.js
- * Description: Tests shared room membership and swipe behavior.
+ * Description: Unit tests for room membership, swipes, unanimous match,
+ *              ties, no likes, majority mode, and solo mode.
+ * Author: Jovian Niko Soesilo
+ * Collaborators: Thanh Lan Ngo
+ * Date Created: 2026-11-17
+ * Last Modified: 2026-11-21
  * Modified by: Thanh Lan Ngo
+ * ============================================================================
  */
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createRoom, getRoom, joinRoom, recordSwipe } from '../src/services/database.js';
+import { createRoom, getRoom, joinRoom, recordSwipe } from '../src/services/roomStore.js';
 
-test('room membership and swipes are shared and a match needs every member', () => {
+test('unanimous match occurs when every member swipes right on the same spot', () => {
   const restaurant = { id: `test-${crypto.randomUUID()}`, name: 'Test Restaurant' };
   const room = createRoom({
     location: 'Test location',
@@ -32,18 +39,71 @@ test('room membership and swipes are shared and a match needs every member', () 
   assert.equal(getRoom(room.code).status, 'matched');
 });
 
-test('a solo host cannot match before other people join', () => {
-  const restaurant = { id: `test-${crypto.randomUUID()}`, name: 'Test Restaurant' };
+test('tie vote (split 1-1 on different spots) produces no match', () => {
+  const spotA = { id: `spot-a-${crypto.randomUUID()}`, name: 'Pizza A' };
+  const spotB = { id: `spot-b-${crypto.randomUUID()}`, name: 'Burger B' };
+  const hostId = crypto.randomUUID();
+  const guestId = crypto.randomUUID();
+
   const room = createRoom({
-    location: 'Test location',
+    location: 'Carlton',
     radiusKm: 3,
+    matchMode: 'majority',
+    restaurants: [spotA, spotB],
+    host: { id: hostId, name: 'Host' },
+  });
+  joinRoom(room.code, { id: guestId, name: 'Guest' });
+
+  recordSwipe(room.code, hostId, spotA.id, 'right');
+  recordSwipe(room.code, hostId, spotB.id, 'left');
+  recordSwipe(room.code, guestId, spotA.id, 'left');
+  const afterGuest = recordSwipe(room.code, guestId, spotB.id, 'right');
+
+  // 1 right vote out of 2 members is a tie (not > 50% and not unanimous).
+  assert.equal(afterGuest.room.votes[spotA.id], 1);
+  assert.equal(afterGuest.room.votes[spotB.id], 1);
+  assert.equal(afterGuest.room.matchedRestaurant, null);
+  assert.equal(afterGuest.room.status, 'swiping');
+});
+
+test('no likes (all left swipes) leaves vote counts at zero and no match', () => {
+  const spotA = { id: `spot-a-${crypto.randomUUID()}`, name: 'Noodle Spot' };
+  const spotB = { id: `spot-b-${crypto.randomUUID()}`, name: 'Taco Spot' };
+  const hostId = crypto.randomUUID();
+  const guestId = crypto.randomUUID();
+
+  const room = createRoom({
+    location: 'Fitzroy',
+    radiusKm: 2,
+    restaurants: [spotA, spotB],
+    host: { id: hostId, name: 'Host' },
+  });
+  joinRoom(room.code, { id: guestId, name: 'Guest' });
+
+  recordSwipe(room.code, hostId, spotA.id, 'left');
+  recordSwipe(room.code, hostId, spotB.id, 'left');
+  recordSwipe(room.code, guestId, spotA.id, 'left');
+  const finalState = recordSwipe(room.code, guestId, spotB.id, 'left');
+
+  assert.equal(finalState.room.votes[spotA.id], 0);
+  assert.equal(finalState.room.votes[spotB.id], 0);
+  assert.equal(finalState.room.matchedRestaurant, null);
+  assert.equal(finalState.room.status, 'swiping');
+});
+
+test('solo mode matches immediately on a single right swipe', () => {
+  const restaurant = { id: `solo-${crypto.randomUUID()}`, name: 'Solo Ramen' };
+  const room = createRoom({
+    location: 'Yarraville',
+    radiusKm: 3,
+    matchMode: 'solo',
     restaurants: [restaurant],
-    host: { id: crypto.randomUUID(), name: 'Host' },
+    host: { id: crypto.randomUUID(), name: 'Solo User' },
   });
 
   const result = recordSwipe(room.code, room.members[0].id, restaurant.id, 'right');
-  assert.equal(result.room.votes[restaurant.id], 1);
-  assert.equal(result.room.matchedRestaurant, null);
+  assert.equal(result.room.status, 'matched');
+  assert.equal(result.room.matchedRestaurant.id, restaurant.id);
 });
 
 // Helper: a room with a host, one guest, and the given restaurant ids.
