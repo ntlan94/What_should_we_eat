@@ -19,7 +19,75 @@ Each person swipes yes or no on nearby restaurants, Tinder-style, and the app sh
 
 Simple routes call services directly; rooms use a controller because they have more logic.
 
+no-match-fallback
+Geoapify has no photos or ratings, so the frontend shows a stock image based on `cuisine`. `openingHours` may be `null`. `isOpenNow` is `true`, `false`, or `null` when the hours are unknown (checked against the server's clock).
+
+### `GET /api/geocode`
+
+Turns a typed place name into coordinates for `/api/restaurants`.
+
+| Query param | Required | Description |
+|---|---|---|
+| `text` | yes | Place name, e.g. `Camden` |
+
+```json
+{ "lat": 51.5427966, "lng": -0.1624803, "label": "Camden, London, ENG, United Kingdom" }
+```
+
+Returns `404` if nothing matches.
+
+### `GET /api/map`
+
+Returns a 600×400 JPEG map with an orange pin on the location. Use it straight in an image tag, since the backend adds the Geoapify key:
+
+```html
+<img src="http://localhost:3000/api/map?lat=51.5072772&lng=-0.1283651" alt="Map">
+```
+
+| Query param | Required | Description |
+|---|---|---|
+| `lat` | yes | Latitude of the pin |
+| `lng` | yes | Longitude of the pin |
+
+Each location is downloaded from Geoapify once, then served from memory (and cached by the browser for a day) to save free credits.
+
+### Room endpoints
+
+- `POST /api/rooms` creates a room and searches restaurants. Send
+  `{ "location": "Camden", "radiusKm": 3, "member": { "id": "browser-id", "name": "Host" } }`.
+- `POST /api/rooms/:code/join` joins a room with `{ "member": { "id": "browser-id", "name": "Guest" } }`.
+- `GET /api/rooms/:code` returns the latest room state.
+- `POST /api/rooms/:code/swipes` records `{ "memberId": "browser-id", "restaurantId": "...", "direction": "right" }`.
+
+Every room response has a `status`:
+
+| `status` | Meaning |
+|---|---|
+| `swiping` | Still going (or only one person in the room) |
+| `matched` | Everyone swiped right on the same place, see `matchedRestaurant` |
+| `finished` | Everyone swiped every card with no full match. `bestRestaurant` is the place with the most right swipes (ties go to the closer place), or `null` if nobody liked anything. `votes[bestRestaurant.id]` gives the count |
+
+If someone joins a `finished` room, it goes back to `swiping` until they finish too.
+
+The frontend polls room state every two seconds. By default it connects to the API at
+`http://<frontend-host>:3000/api`; set `window.WSWE_API_BASE_URL` before loading
+`src/app.js` when the backend uses another URL. For example:
+
+```html
+<script>window.WSWE_API_BASE_URL = 'https://api.example.com/api';</script>
+```
+
+## Team
+
+- Thanh Lan Ngo
+- Jovian Niko Soesilo
+
+## License
+
+[MIT](LICENSE)
+
 ## Project structure
+main
 
 ```text
 what-should-we-eat/
