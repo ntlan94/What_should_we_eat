@@ -8,8 +8,8 @@
  * Author: Thanh Lan Ngo
  * Collaborators: Jovian Niko Soesilo
  * Date Created: 2026-11-21
- * Last Modified: 2026-11-21
- * Modified by: Thanh Lan Ngo
+ * Last Modified: 2026-11-23
+ * Modified by: Jovian Niko Soesilo
  * ============================================================================
  */
 
@@ -80,6 +80,8 @@ function toPublicRoom(room) {
       }
     : null;
 
+  const finished = !matchedRestaurant && everyoneFinished(room);
+
   return {
     code: room.code,
     location: room.location,
@@ -89,10 +91,31 @@ function toPublicRoom(room) {
     restaurants: room.restaurants,
     members: room.members,
     votes,
-    status: matchedRestaurant ? 'matched' : 'swiping',
+    status: matchedRestaurant ? 'matched' : finished ? 'finished' : 'swiping',
     matchedRestaurant,
     matchDetails,
+    bestRestaurant: finished ? mostLiked(room.restaurants, votes) : null,
   };
+}
+
+
+// True when everyone has swiped every card. In 'all' mode a lone host does not
+// count (same as matching), so they can't finish before friends join.
+function everyoneFinished(room) {
+  const minMembers = room.matchMode === 'all' ? 2 : 1;
+  return room.members.length >= minMembers && room.members.every((member) =>
+    room.restaurants.every((restaurant) => room.swipes[member.id]?.[restaurant.id])
+  );
+}
+
+// The restaurant with the most right swipes, or null if nobody liked anything.
+// Ties go to the earlier card, which is the closer place.
+function mostLiked(restaurants, votes) {
+  let best = null;
+  for (const restaurant of restaurants) {
+    if (votes[restaurant.id] > (best ? votes[best.id] : 0)) best = restaurant;
+  }
+  return best;
 }
 
 function generateUniqueCode() {
