@@ -19,7 +19,6 @@ Each person swipes yes or no on nearby restaurants, Tinder-style, and the app sh
 
 Simple routes call services directly; rooms use a controller because they have more logic.
 
-no-match-fallback
 Geoapify has no photos or ratings, so the frontend shows a stock image based on `cuisine`. `openingHours` may be `null`. `isOpenNow` is `true`, `false`, or `null` when the hours are unknown (checked against the server's clock).
 
 ### `GET /api/geocode`
@@ -87,7 +86,6 @@ The frontend polls room state every two seconds. By default it connects to the A
 [MIT](LICENSE)
 
 ## Project structure
-main
 
 ```text
 what-should-we-eat/
