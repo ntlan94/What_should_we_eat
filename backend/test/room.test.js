@@ -63,7 +63,7 @@ test('tie vote (split 1-1 on different spots) produces no match', () => {
   assert.equal(afterGuest.room.votes[spotA.id], 1);
   assert.equal(afterGuest.room.votes[spotB.id], 1);
   assert.equal(afterGuest.room.matchedRestaurant, null);
-  assert.equal(afterGuest.room.status, 'swiping');
+  assert.equal(afterGuest.room.status, 'finished');
 });
 
 test('no likes (all left swipes) leaves vote counts at zero and no match', () => {
@@ -88,7 +88,7 @@ test('no likes (all left swipes) leaves vote counts at zero and no match', () =>
   assert.equal(finalState.room.votes[spotA.id], 0);
   assert.equal(finalState.room.votes[spotB.id], 0);
   assert.equal(finalState.room.matchedRestaurant, null);
-  assert.equal(finalState.room.status, 'swiping');
+  assert.equal(finalState.room.status, 'finished');
 });
 
 test('solo mode matches immediately on a single right swipe', () => {
